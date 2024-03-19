@@ -174,10 +174,11 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
 
     # upload
     if isinstance(target, IrodsPath):
-        new_colls=[str(target / x.path) for x in folders_diff if not x.is_empty() or copy_empty_folders]
+        new_folders=[str(target / x.path) for x in folders_diff if not x.is_empty() or copy_empty_folders]
+        root=source
         if not dry_run:
-            for coll in new_colls:
-                create_collection(session, coll)
+            for folder in new_folders:
+                create_collection(session, folder)
             _copy_local_to_irods(
                 session=session,
                 source=Path(source),
@@ -188,6 +189,7 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
     # download
     else:
         new_folders=[Path(target) / Path(x.path) for x in folders_diff if not x.is_empty() or copy_empty_folders]
+        root=target
         if not dry_run:
             for folder in new_folders:
                 folder.mkdir(parents=True, exist_ok=True)
@@ -198,6 +200,9 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
                 objects=files_diff,
                 verify_checksum=verify_checksum,
                 on_checksum_fail=on_checksum_fail)
+    
+    if dry_run:
+        return new_folders, [(root / x.path, x.size) for x in files_diff]
 
 def _param_checks(source, target, on_checksum_fail):
     if not isinstance(source, IrodsPath) and not isinstance(target, IrodsPath):
