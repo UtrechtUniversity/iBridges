@@ -178,28 +178,26 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
         if not dry_run:
             for coll in new_colls:
                 create_collection(session, coll)
-        _copy_local_to_irods(
-            session=session,
-            source=Path(source),
-            target=target,
-            files=files_diff,
-            dry_run=dry_run,
-            verify_checksum=verify_checksum,
-            on_checksum_fail=on_checksum_fail)
+            _copy_local_to_irods(
+                session=session,
+                source=Path(source),
+                target=target,
+                files=files_diff,
+                verify_checksum=verify_checksum,
+                on_checksum_fail=on_checksum_fail)
     # download
     else:
         new_folders=[Path(target) / Path(x.path) for x in folders_diff if not x.is_empty() or copy_empty_folders]
         if not dry_run:
             for folder in new_folders:
                 folder.mkdir(parents=True, exist_ok=True)
-        _copy_irods_to_local(
-            session=session,
-            source=source,  # type: ignore
-            target=Path(target),
-            objects=files_diff,
-            dry_run=dry_run,
-            verify_checksum=verify_checksum,
-            on_checksum_fail=on_checksum_fail)
+            _copy_irods_to_local(
+                session=session,
+                source=source,  # type: ignore
+                target=Path(target),
+                objects=files_diff,
+                verify_checksum=verify_checksum,
+                on_checksum_fail=on_checksum_fail)
 
 def _param_checks(source, target, on_checksum_fail):
     if not isinstance(source, IrodsPath) and not isinstance(target, IrodsPath):
@@ -292,14 +290,8 @@ def _copy_local_to_irods(session: Session,   #pylint: disable=too-many-arguments
                          source: Path,
                          target: IrodsPath,
                          files: list[FileObject],
-                         dry_run: bool,
                          verify_checksum: bool,
                          on_checksum_fail: str) -> None:
-    if dry_run:
-        print(f"Will upload from '{source}' to '{target}':")
-        print(*[f"  {x.path}  {x.size}" for x in files], sep='\n')
-        return
-
     pbar=tqdm(desc='Uploading', total=sum(x.size for x in files))
     for file in files:
         source_path=Path(source) / file.path
@@ -327,14 +319,8 @@ def _copy_irods_to_local(session: Session,     #pylint: disable=too-many-argumen
                          source: IrodsPath,
                          target: Path,
                          objects: list[FileObject],
-                         dry_run: bool,
                          verify_checksum: bool,
                          on_checksum_fail: str) -> None:
-    if dry_run:
-        print(f"Will download from '{source}' to '{target}':")
-        print(*[f"  {x.path}  {x.size}" for x in objects], sep='\n')
-        return
-
     pbar=tqdm(desc='Downloading', total=sum(x.size for x in objects))
     for obj in objects:
         target_path=Path(target) / obj.path
