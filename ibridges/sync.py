@@ -172,13 +172,12 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
         set(src_files).difference(set(tgt_files)),
         key=lambda x: (x.path.count('/'), x.path))
 
+    # upload
     if isinstance(target, IrodsPath):
-        _create_irods_collections(
-            session=session,
-            target=target,
-            collections=folders_diff,
-            dry_run=dry_run,
-            copy_empty_folders=copy_empty_folders)
+        new_colls=[str(target / x.path) for x in folders_diff if not x.is_empty() or copy_empty_folders]
+        if not dry_run:
+            for coll in new_colls:
+                create_collection(session, coll)
         _copy_local_to_irods(
             session=session,
             source=Path(source),
@@ -187,12 +186,12 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
             dry_run=dry_run,
             verify_checksum=verify_checksum,
             on_checksum_fail=on_checksum_fail)
+    # download
     else:
-        _create_local_folders(
-            target=Path(target),
-            folders=folders_diff,
-            dry_run=dry_run,
-            copy_empty_folders=copy_empty_folders)
+        new_folders=[Path(target) / Path(x.path) for x in folders_diff if not x.is_empty() or copy_empty_folders]
+        if not dry_run:
+            for folder in new_folders:
+                folder.mkdir(parents=True, exist_ok=True)
         _copy_irods_to_local(
             session=session,
             source=source,  # type: ignore
@@ -288,31 +287,6 @@ def _get_irods_tree(coll: iRODSCollection,
         collections=[]
 
     return objects, collections
-
-def _create_irods_collections(session: Session,
-                              target: IrodsPath,
-                              collections: list[FolderObject],
-                              dry_run: bool,
-                              copy_empty_folders: bool):
-    new_colls=[str(target / x.path) for x in collections if not x.is_empty() or copy_empty_folders]
-    if dry_run:
-        print("Will create collection(s):")
-        print(*[f"  {x}" for x in new_colls], sep='\n')
-        return
-    for coll in new_colls:
-        create_collection(session, coll)
-
-def _create_local_folders(target: Path,
-                          folders: list[FolderObject],
-                          dry_run: bool,
-                          copy_empty_folders: bool):
-    new_folders=[target / Path(x.path) for x in folders if not x.is_empty() or copy_empty_folders]
-    if dry_run:
-        print("Will create folder(s):")
-        print(*[f"  {x}" for x in new_folders], sep='\n')
-        return
-    for folder in new_folders:
-        folder.mkdir(parents=True, exist_ok=True)
 
 def _copy_local_to_irods(session: Session,   #pylint: disable=too-many-arguments
                          source: Path,
