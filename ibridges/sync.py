@@ -140,14 +140,14 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
         src_files, src_folders=_get_irods_tree(
             coll=get_collection(session=session, path=source),
             max_level=max_level,
-            ignore_checksum=ignore_checksum)
+            get_checksum=verify_checksum or not ignore_checksum)
     else:
         if not Path(source).is_dir():
             raise ValueError(f"Source folder '{source}' does not exist")
         src_files, src_folders=_get_local_tree(
             path=Path(source),
             max_level=max_level,
-            ignore_checksum=ignore_checksum)
+            get_checksum=verify_checksum or not ignore_checksum)
 
     if isinstance(target, IrodsPath):
         if not target.collection_exists():
@@ -155,14 +155,14 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
         tgt_files, tgt_folders=_get_irods_tree(
             coll=get_collection(session=session, path=target),
             max_level=max_level,
-            ignore_checksum=ignore_checksum)
+            get_checksum=verify_checksum or not ignore_checksum)
     else:
         if not Path(target).is_dir():
             raise ValueError(f"Target folder '{target}' does not exist")
         tgt_files, tgt_folders=_get_local_tree(
             path=Path(target),
             max_level=max_level,
-            ignore_checksum=ignore_checksum)
+            get_checksum=verify_checksum or not ignore_checksum)
 
     folders_diff=sorted(
         set(src_folders).difference(set(tgt_folders)),
@@ -202,6 +202,7 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
                 on_checksum_fail=on_checksum_fail)
     
     if dry_run:
+        # TODO: include up- or doanload?
         return new_folders, [(root / x.path, x.size) for x in files_diff]
 
 def _param_checks(source, target, on_checksum_fail):
@@ -225,7 +226,7 @@ def _calc_checksum(filepath):
 
 def _get_local_tree(path: Path,
                     max_level: Optional[int] = None,
-                    ignore_checksum: bool = False):
+                    get_checksum: bool = False):
 
     # change all sep into /, regardless of platform, for easier comparison
     def fix_local_path(path: str):
@@ -243,7 +244,7 @@ def _get_local_tree(path: Path,
                     name=file,
                     path=fix_local_path(rel_path),
                     size=full_path.stat().st_size,
-                    checksum=None if ignore_checksum else _calc_checksum(full_path)))
+                    checksum=_calc_checksum(full_path) if get_checksum else None))
 
         collections.extend([FolderObject(
                 fix_local_path(str(Path(root) / dir)[len(str(path)):].lstrip(os.sep)),
@@ -258,7 +259,7 @@ def _get_irods_tree(coll: iRODSCollection,
                     root: str = '',
                     level: int = 0,
                     max_level: Optional[int] = None,
-                    ignore_checksum: bool = False):
+                    get_checksum: bool = False):
 
     root=coll.path if len(root)==0 else root
 
@@ -267,7 +268,7 @@ def _get_irods_tree(coll: iRODSCollection,
         x.name,
         x.path[len(root):].lstrip('/'),
         x.size,
-        None if ignore_checksum else (x.checksum if len(x.checksum)>0 else x.chksum()))
+        (x.checksum if len(x.checksum)>0 else x.chksum()) if get_checksum else None)
         for x in coll.data_objects]
 
     if max_level is None or level<max_level-1:
@@ -282,7 +283,7 @@ def _get_irods_tree(coll: iRODSCollection,
                 root=root,
                 level=level+1,
                 max_level=max_level,
-                ignore_checksum=ignore_checksum
+                get_checksum=get_checksum
                 )
             objects.extend(subobjects)
             collections.extend(subcollections)
@@ -336,6 +337,10 @@ def _copy_irods_to_local(session: Session,     #pylint: disable=too-many-argumen
                         local_path=target_path,
                         overwrite=True)
             if verify_checksum and obj.checksum != _calc_checksum(target_path):
+
+                print(obj.chcksm())
+                print(_calc_checksum(target_path))
+
                 msg=f"Checksum mismatch after download: '{source_path}'"
                 if on_checksum_fail=='error':
                     raise ValueError(msg)
