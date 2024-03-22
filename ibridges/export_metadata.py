@@ -1,7 +1,7 @@
-"""Exporting metadata.
-"""
+"""Exporting metadata."""
 
 from typing import Optional, Union
+
 from irods.collection import iRODSCollection
 
 from ibridges.data_operations import is_collection, is_dataobject
@@ -9,9 +9,11 @@ from ibridges.meta import MetaData
 from ibridges.path import IrodsPath
 from ibridges.session import Session
 
+
 def export_metadata_to_dict(meta: MetaData, session: Session,
                             recursive: bool = True, keys: Optional[list] = None) -> dict:
-    """Retrieves the metadata of the item and brings it into dict form.
+    """Retrieve the metadata of the item and brings it into dict form.
+
     If the item is a collection all metadata from all subcollections
     and data objects will also be exported.
 
@@ -48,6 +50,28 @@ def export_metadata_to_dict(meta: MetaData, session: Session,
             …
         ]
     }
+
+    Parameters
+    ----------
+    meta:
+        Metadata object to the collection or data object.
+    session:
+        Session for which the metadata is retrieved.
+    recursive:
+        Whether to also retrieve metadata for the sub collections (if applicable).
+    keys:
+        Select all entries that have a name within this list, other entries are discarded.
+        If keys is None, then all metadata entries are selected.
+
+    Raises
+    ------
+    ValueError:
+        If the metadata object is not pointing to a collection or data object.
+
+    Returns
+    -------
+        Dictionary containing the requested metadata items.
+
     """
     version = {"ibridges_metadata_version": 1.0}
     if is_dataobject(meta.item):
@@ -55,7 +79,7 @@ def export_metadata_to_dict(meta: MetaData, session: Session,
     if is_collection(meta.item):
         metadata_dict = version | meta.to_dict(keys = keys)
         if recursive is True:
-            objects, collections = get_meta_from_irods_tree(session, meta.item,
+            objects, collections = _get_meta_from_irods_tree(session, meta.item,
                                                             root = meta.item.path)
             metadata_dict["subcollections"] = collections
             metadata_dict["dataobjects"] = objects
@@ -63,17 +87,17 @@ def export_metadata_to_dict(meta: MetaData, session: Session,
         return metadata_dict
     raise ValueError("Not a data collection or data object: {item}")
 
-def get_meta_from_irods_tree(session: Session, coll: iRODSCollection,
-                             root: Optional[Union[str, IrodsPath]] = None):
-    """Recursively gather the metadata for all subcollections and data objects.
-    """
+def _get_meta_from_irods_tree(session: Session, coll: iRODSCollection,
+                             root: Optional[Union[str, IrodsPath]] = None
+                             ) -> tuple[list[dict], list[dict]]:
+    """Recursively gather the metadata for all subcollections and data objects."""
     if root is not None:
         root_path = IrodsPath(session, root)
     else:
         root_path = IrodsPath(session, coll.path)
 
     objects = [{'name': o.name, 'irods_id': o.id, 'checksum': o.checksum,
-                'rel_path': '/'.join(IrodsPath(session, 
+                'rel_path': '/'.join(IrodsPath(session,
                                                o.path).parts[len(root_path.parts):]),
                 'metadata': MetaData(o).to_dict()['metadata']}
                 for o in coll.data_objects
@@ -85,7 +109,7 @@ def get_meta_from_irods_tree(session: Session, coll: iRODSCollection,
                     for c in coll.subcollections]
     if len(coll.subcollections) > 0:
         for subcoll in coll.subcollections:
-            subobjects, subcollections = get_meta_from_irods_tree(session, subcoll, root_path)
+            subobjects, subcollections = _get_meta_from_irods_tree(session, subcoll, root_path)
             objects.extend(subobjects)
             collections.extend(subcollections)
     else:
