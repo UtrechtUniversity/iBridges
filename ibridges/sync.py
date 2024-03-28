@@ -92,7 +92,7 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
          ignore_checksum: bool = False,
          copy_empty_folders: bool = False,
          verify_checksum: bool = True,
-         on_checksum_fail: str = 'error') -> None:
+         on_checksum_fail: str = 'error') -> dict:
     """Synchronize the data between a local copy (local file system) and the copy stored in iRODS.
 
     The command can be in one of the two modes: synchronization of data from the client's local file
@@ -201,6 +201,7 @@ def sync_data(session: Session,   #pylint: disable=too-many-arguments
             dry_run=dry_run,
             verify_checksum=verify_checksum,
             on_checksum_fail=on_checksum_fail)
+    return {'changed_folders': folders_diff, 'changed_files': files_diff}
 
 def _param_checks(source, target, on_checksum_fail):
     if not isinstance(source, IrodsPath) and not isinstance(target, IrodsPath):
