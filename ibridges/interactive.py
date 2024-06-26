@@ -8,6 +8,7 @@ from typing import Optional, Union
 from ibridges.session import LoginError, PasswordError, Session
 
 DEFAULT_IENV_PATH = Path(os.path.expanduser("~")).joinpath(".irods", "irods_environment.json")
+DEFAULT_IRODSA_PATH = Path.home() / ".irods" / ".irodsA"
 
 def interactive_auth(password: Optional[str] = None,
                      irods_env_path: Union[None, str, Path] = None) -> Session:
@@ -41,8 +42,7 @@ def interactive_auth(password: Optional[str] = None,
         raise FileNotFoundError
 
     session = None
-    if os.path.exists(Path(os.path.expanduser("~")).joinpath(".irods", ".irodsA")) and \
-            password is None:
+    if DEFAULT_IRODSA_PATH.is_file() and password is None:
         session = _from_pw_file(irods_env_path)
 
     if password is not None:

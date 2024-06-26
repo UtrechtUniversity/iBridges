@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Sequence
+from hashlib import sha256
 from typing import Union
 
 import irods
@@ -83,6 +85,7 @@ def obj_replicas(obj: irods.data_object.iRODSDataObject) -> list[tuple[int, str,
 
     return replicas
 
+
 def get_environment_providers() -> list:
     """Get a list of all environment template providers.
 
@@ -137,3 +140,13 @@ def find_environment_provider(env_providers: list, server_name: str) -> object:
             return provider
     raise ValueError("Cannot find provider with name {server_name} ensure that the plugin is "
                      "installed.")
+
+def calc_checksum(filepath):
+    if isinstance(filepath, IrodsPath):
+        return filepath.checksum
+    f_hash=sha256()
+    memv=memoryview(bytearray(128*1024))
+    with open(filepath, 'rb', buffering=0) as file:
+        for item in iter(lambda : file.readinto(memv), 0):
+            f_hash.update(memv[:item])
+    return f"sha2:{str(base64.b64encode(f_hash.digest()), encoding='utf-8')}"
