@@ -4,10 +4,8 @@ Transfer data between local file system and iRODS, includes upload, download and
 """
 from __future__ import annotations
 
-import base64
 import os
 import warnings
-from hashlib import sha256
 from pathlib import Path
 from typing import Optional, Union
 
@@ -19,6 +17,7 @@ from tqdm import tqdm
 
 from ibridges.path import CachedIrodsPath, IrodsPath
 from ibridges.session import Session
+from ibridges.util import calc_checksum
 
 NUM_THREADS = 4
 
@@ -167,7 +166,7 @@ def upload(session: Session, local_path: Union[str, Path], irods_path: Union[str
                 f"Dataset {irods_path} already exists. "
                 "Use overwrite=True to overwrite the existing file.")
 
-        if not (obj_exists and _calc_checksum(local_path) == _calc_checksum(ipath)):
+        if not (obj_exists and calc_checksum(local_path) == calc_checksum(ipath)):
             ops["upload"].append((local_path, ipath))
 
     else:
@@ -308,7 +307,7 @@ def download(session: Session, irods_path: Union[str, IrodsPath], local_path: Un
             raise FileExistsError(f"File or directory {local_path} already exists. "
                                    "Use overwrite=True to overwrite the existing file(s).")
         if not (local_path.is_file() and
-                (_calc_checksum(irods_path) == _calc_checksum(local_path))):
+                (calc_checksum(irods_path) == calc_checksum(local_path))):
             ops["download"].append((irods_path, local_path))
 
     else:
@@ -498,16 +497,6 @@ def _param_checks(source, target):
     if isinstance(source, IrodsPath) and isinstance(target, IrodsPath):
         raise TypeError("iRODS to iRODS copying is not supported.")
 
-def _calc_checksum(filepath):
-    if isinstance(filepath, IrodsPath):
-        return filepath.checksum
-    f_hash=sha256()
-    memv=memoryview(bytearray(128*1024))
-    with open(filepath, 'rb', buffering=0) as file:
-        for item in iter(lambda : file.readinto(memv), 0):
-            f_hash.update(memv[:item])
-    return f"sha2:{str(base64.b64encode(f_hash.digest()), encoding='utf-8')}"
-
 def _empty_ops():
     return {
         "create_dir": set(),
@@ -522,8 +511,8 @@ def _down_sync_operations(isource_path, ldest_path, copy_empty_folders=True, dep
         lpath = ldest_path.joinpath(*ipath.relative_to(isource_path).parts)
         if ipath.dataobject_exists():
             if lpath.is_file():
-                l_chksum = _calc_checksum(lpath)
-                i_chksum = _calc_checksum(ipath)
+                l_chksum = calc_checksum(lpath)
+                i_chksum = calc_checksum(ipath)
                 if i_chksum != l_chksum:
                     operations["download"].append((ipath, lpath))
             else:
@@ -553,8 +542,8 @@ def _up_sync_operations(lsource_path, idest_path, copy_empty_folders=True, depth
             lpath = lsource_path / root_part / cur_file
             if str(ipath) in remote_ipaths:
                 ipath = remote_ipaths[str(ipath)]
-                l_chksum = _calc_checksum(lpath)
-                i_chksum = _calc_checksum(ipath)
+                l_chksum = calc_checksum(lpath)
+                i_chksum = calc_checksum(ipath)
 
                 if i_chksum != l_chksum:
                     operations["upload"].append((lpath, ipath))
