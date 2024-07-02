@@ -17,6 +17,7 @@ import irods.data_object
 import irods.exception
 import irods.keywords as kw
 from tqdm import tqdm
+from tqdm.std import tqdm as tqdm_type
 
 from ibridges.path import CachedIrodsPath, IrodsPath
 from ibridges.session import Session
@@ -32,6 +33,7 @@ def _obj_put(
     resc_name: str = "",
     options: Optional[dict] = None,
     ignore_err: bool = False,
+    pbar: Optional[tqdm_type] = None,
 ):
     """Upload `local_path` to `irods_path` following iRODS `options`.
 
@@ -51,6 +53,8 @@ def _obj_put(
         Extra options to the python irodsclient put method.
     ignore_err:
         If True, convert errors into warnings.
+    pbar:
+        Optional progress bar.
 
     """
     local_path = Path(local_path)
@@ -76,8 +80,11 @@ def _obj_put(
     if resc_name not in ["", None]:
         options[kw.RESC_NAME_KW] = resc_name
     if overwrite or not obj_exists:
+        updatables = [] if pbar is None else [pbar.update]
         try:
-            session.irods_session.data_objects.put(local_path, str(irods_path), **options)
+            session.irods_session.data_objects.put(local_path, str(irods_path),
+                                                   updatables=updatables,
+                                                   **options)
         except (PermissionError, OSError) as error:
             err_msg = f"Cannot read {error.filename}."
             if not ignore_err:
@@ -195,7 +202,6 @@ def upload(
         perform_operations(session, ops, ignore_err=ignore_err)
     return ops
 
-
 def _obj_get(
     session: Session,
     irods_path: IrodsPath,
@@ -204,6 +210,7 @@ def _obj_get(
     resc_name: Optional[str] = "",
     options: Optional[dict] = None,
     ignore_err: bool = False,
+    pbar: Optional[tqdm_type] = None,
 ):
     """Download `irods_path` to `local_path` following iRODS `options`.
 
@@ -223,6 +230,8 @@ def _obj_get(
         Extra options to the python irodsclient get method.
     ignore_err:
         If True, convert errors into warnings.
+    pbar:
+        Optional progress bar.
 
     """
     if options is None:
@@ -242,8 +251,11 @@ def _obj_get(
     if Path(local_path).is_dir():
         local_path = Path(local_path).joinpath(irods_path.name)
 
+    updatables = [] if pbar is None else [pbar.update]
+
     try:
-        session.irods_session.data_objects.get(str(irods_path), local_path, **options)
+        session.irods_session.data_objects.get(str(irods_path), local_path,
+                                               updatables=updatables, **options)
     except (OSError, irods.exception.CAT_NO_ACCESS_PERMISSION) as error:
         msg = f"Cannot write to {local_path}."
         if not ignore_err:
@@ -455,6 +467,7 @@ def perform_operations(session: Session, operations: dict, ignore_err: bool = Fa
             ignore_err=ignore_err,
             options=options,
             resc_name=resc_name,
+            pbar=pbar,
         )
         pbar.update(size)
     for (ipath, lpath), size in zip(operations["download"], down_sizes):
@@ -466,6 +479,7 @@ def perform_operations(session: Session, operations: dict, ignore_err: bool = Fa
             ignore_err=ignore_err,
             options=options,
             resc_name=resc_name,
+            pbar=pbar,
         )
         pbar.update(size)
     # session.irods_session.pool.connection_timeout = original_timeout
